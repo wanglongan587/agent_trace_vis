@@ -1,6 +1,9 @@
 # agent_trace_vis
 
-直接复制给Agent，让agent安装：这个是我的dashboard项目，plugins目录下是opencode插件，可以采集opencode对话数据。现在请帮我安装这个插件，然后启动当前python项目，请仔细阅读项目的readme。
+直接复制给Agent，让agent安装：
+```bash
+这个是我的dashboard项目，plugins目录下是opencode插件，可以采集opencode对话数据。现在请帮我安装这个插件，然后启动当前python项目，请仔细阅读项目的readme。
+ ```
 
 A Streamlit-based **agent trace visualizer**. It parses the internal event
 streams that AI coding agents (opencode, Claude Code) produce during a session
