@@ -87,6 +87,7 @@ class ParseResult:
 
     parse_errors: int = 0
     parse_debug: dict[str, Any] = field(default_factory=dict)
+    subagents: list[dict[str, Any]] = field(default_factory=list)
 
     # ── Convenience properties ─────────────────────────────────
     @property

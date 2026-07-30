@@ -30,6 +30,7 @@ from trace_viz.views.shared import (
     token_trend_fig,
     tool_efficiency_table,
     tool_inspector,
+    tool_success_rate,
     tool_tiktoken_fig,
 )
 
@@ -48,16 +49,14 @@ def render() -> None:
 
 def render_body(result: ParseResult) -> None:
     """Renders an already-parsed result, shared by the standalone and embedded flows."""
-    st.header("Claude Code 运行过程可视化")
-    st.caption("支持交互式 terminal 会话记录（transcript JSONL）与 `-p` 模式的 stream-json 两种格式")
+    df_tools = _build_tools_df(result)
 
     _sidebar_meta(result)
-    _metrics_row(result)
+    _metrics_row(result, df_tools)
     st.markdown("---")
 
     is_transcript = result.parse_debug.get("format") == "transcript"
     df_turns = pd.DataFrame([t.__dict__ for t in result.turns]) if result.turns else pd.DataFrame()
-    df_tools = _build_tools_df(result)
 
     tabs = ["Token 趋势", "工具执行",  "成本分析", "原始数据"]
     if is_transcript:
@@ -197,14 +196,15 @@ def _sidebar_meta(result: ParseResult) -> None:
 
 # ── Metrics row ────────────────────────────────────────────────
 
-def _metrics_row(result: ParseResult) -> None:
+def _metrics_row(result: ParseResult, df_tools: pd.DataFrame) -> None:
     ri = result.result_info
-    m1, m2, m3, m4, m5 = st.columns(5)
+    m1, m2, m3, m4, m5, m6 = st.columns(6)
     m1.metric("LLM 推理轮次",     len(result.turns))
     m2.metric("工具调用总数",      len(result.tool_calls))
     m3.metric("峰值 Input Tokens", f"{result.peak_input_tokens:,}" if result.peak_input_tokens else "—")
     m4.metric("总耗时",            format_duration(ri.duration_ms))
     m5.metric("总费用",            f"${result.total_cost_usd:.4f}" if result.total_cost_usd else "—")
+    m6.metric("工具调用成功率",     f"{tool_success_rate(df_tools):.1f}%")
 
 
 # ── DataFrame builders ─────────────────────────────────────────

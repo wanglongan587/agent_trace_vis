@@ -69,15 +69,15 @@ _MERMAID_TABLE = str.maketrans({
     # Curly/smart/fullwidth quotes are NOT caught by the ASCII mapping above; left
     # unescaped they terminate Mermaid's double-quoted label mid-string and surface
     # as "Syntax error in text" in the sequence diagram. Normalize all of them to
-    # ASCII single quotes so agent-generated prose (which freely uses “smart quotes”)
+    # ASCII single quotes so agent-generated prose (which freely uses "smart quotes")
     # renders safely inside a Mermaid message label.
-    "\u201c": "'",  # left double quotation mark “
-    "\u201d": "'",  # right double quotation mark ”
+    "\u201c": "'",  # left double quotation mark "
+    "\u201d": "'",  # right double quotation mark "
     "\u201e": "'",  # double low-9 quotation mark „
     "\u201f": "'",  # double high-reversed-9 quotation mark ‟
     "\uff02": "'",  # fullwidth quotation mark ＂
-    "\u2018": "'",  # left single quotation mark ‘
-    "\u2019": "'",  # right single quotation mark ’
+    "\u2018": "'",  # left single quotation mark '
+    "\u2019": "'",  # right single quotation mark '
     "\u201a": "'",  # single low-9 quotation mark ‚
     "\u201b": "'",  # single high-reversed-9 quotation mark ‛
 })

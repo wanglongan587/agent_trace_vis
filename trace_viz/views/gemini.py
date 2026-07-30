@@ -25,8 +25,6 @@ from trace_viz.views.shared import (
 
 def render() -> None:
     """Top-level entry point called from app.py."""
-    st.header("Gemini CLI Telemetry Viewer")
-
     result = _sidebar_input()
     if result is None:
         st.info("请在左侧选择数据来源并点击解析。")

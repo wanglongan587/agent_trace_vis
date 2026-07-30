@@ -9,6 +9,8 @@ Key algorithm: weight-based token allotment.
 from __future__ import annotations
 
 import json
+import re
+from collections import deque
 from typing import Any
 
 import streamlit as st
@@ -28,6 +30,7 @@ def parse(content: bytes) -> ParseResult:
     turns = _extract_turns(raw_events)
     tool_calls = _extract_tool_calls(raw_events, turns)
     result_info = _build_result_info(raw_events, turns)
+    subagents = _extract_subagents(raw_events)
 
     return ParseResult(
         source="opencode",
@@ -36,6 +39,7 @@ def parse(content: bytes) -> ParseResult:
         result_info=result_info,
         turns=turns,
         tool_calls=tool_calls,
+        subagents=subagents,
     )
 
 
@@ -134,6 +138,100 @@ def _extract_tool_calls(
         ))
 
     return tool_calls
+
+
+# 真实 opencode 并不会发出独立的 subagent.spawn 事件（插件里监听
+# message.part.updated 的 agent/subtask part 分支在实际运行中从未触发过）。
+# 子代理的派发在真实 trace 里只是一次普通的 task 工具调用：
+#   tool.start / tool.finish，tool == "task"
+# 子会话 ID 只出现在 tool.finish.output 的自由文本里，形如：
+#   <task id="ses_xxx" state="completed">...
+# 需要正则提取。
+_TASK_RESULT_RE = re.compile(r'<task\s+id="([^"]+)"\s+state="([^"]*)"')
+
+
+def _extract_subagents(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """从 task 工具调用中还原子代理派发信息，兼容旧的 subagent.spawn 事件。
+
+    注意：真实数据里 tool.start / tool.finish 的 toolCallId 经常对不上——插件在
+    缺少显式 ID 时用 `Date.now()` 兜底生成，start 和 finish 取到的是两个不同
+    时刻，因此不能按 ID 配对 task 的起止。这里改用 FIFO 顺序配对：task 调用
+    绝大多数场景下是"派发-阻塞等待完成"的顺序模式，不会大量并发交错，顺序
+    配对足够可靠；配对结果仅用于估算父侧观测到的派发耗时，不影响子会话 ID
+    的提取（那部分始终来自 finish.output 的正则匹配）。
+    """
+    pending_starts: deque[dict[str, Any]] = deque()
+    subagents: list[dict[str, Any]] = []
+    seen_child_ids: set[str] = set()
+
+    for evt in events:
+        etype = evt.get("type")
+        if etype == "tool.start" and evt.get("tool") == "task":
+            pending_starts.append(evt)
+            continue
+        if etype != "tool.finish" or evt.get("tool") != "task":
+            continue
+
+        start_evt = pending_starts.popleft() if pending_starts else None
+        args = evt.get("args") or {}
+        output = to_str(evt.get("output", ""))
+        m = _TASK_RESULT_RE.search(output)
+        child_id = m.group(1) if m else ""
+        state = m.group(2) if m else ("error" if evt.get("isError") else "unknown")
+
+        duration_ms = None
+        if start_evt is not None:
+            duration_ms = max(0, evt.get("ts", 0) - start_evt.get("ts", 0))
+
+        if child_id:
+            seen_child_ids.add(child_id)
+        subagents.append({
+            "childSessionID": child_id,
+            "agentName": str(args.get("subagent_type", "")),
+            "description": str(args.get("description", "")),
+            "state": state,
+            "globalStep": evt.get("globalStep", 0),
+            "ts": evt.get("ts", 0),
+            "dispatchDurationMs": duration_ms,
+        })
+
+    # 还在进行中的 task 调用（只有 start，没有 finish）：拿不到子会话 ID
+    # （ID 只出现在 finish 的输出里），但仍应让用户知道"有一次派发还未完成"，
+    # 而不是让它凭空消失。
+    for start_evt in pending_starts:
+        args = start_evt.get("args") or {}
+        subagents.append({
+            "childSessionID": "",
+            "agentName": str(args.get("subagent_type", "")),
+            "description": str(args.get("description", "")),
+            "state": "running",
+            "globalStep": start_evt.get("globalStep", 0),
+            "ts": start_evt.get("ts", 0),
+            "dispatchDurationMs": None,
+        })
+
+    # 向后兼容：如果某个环境的插件确实发出了 subagent.spawn（例如未来版本
+    # 修好了 message.part.updated 的那个分支），也一并纳入，按 childSessionID
+    # 去重，避免同一个子会话被展示两次。
+    for evt in events:
+        if evt.get("type") != "subagent.spawn":
+            continue
+        cid = evt.get("childSessionID", "")
+        if cid and cid in seen_child_ids:
+            continue
+        if cid:
+            seen_child_ids.add(cid)
+        subagents.append({
+            "childSessionID": cid,
+            "agentName": evt.get("agentName", ""),
+            "description": "",
+            "state": "unknown",
+            "globalStep": evt.get("globalStep", 0),
+            "ts": evt.get("ts", 0),
+            "dispatchDurationMs": None,
+        })
+
+    return subagents
 
 
 def _build_result_info(events: list[dict], turns: list[Turn]) -> ResultInfo:

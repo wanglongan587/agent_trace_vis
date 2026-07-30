@@ -255,6 +255,13 @@ def tool_tiktoken_fig(df_tools: pd.DataFrame) -> go.Figure:
 
 # ── Tool components ────────────────────────────────────────────
 
+def tool_success_rate(df_tools: pd.DataFrame) -> float:
+    """整体工具调用成功率（百分比）。没有调用记录时视为 100%。"""
+    if df_tools.empty:
+        return 100.0
+    return round((1 - df_tools["is_error"].sum() / len(df_tools)) * 100, 1)
+
+
 def tool_efficiency_table(df_tools: pd.DataFrame) -> None:
     """Grouped tool efficiency summary table.
 
@@ -284,6 +291,13 @@ def tool_efficiency_table(df_tools: pd.DataFrame) -> None:
         .reset_index()
         .rename(columns={"name": "工具"})
     )
+
+    # 成功率：基于分组内的调用次数与错误次数计算，1-错误率
+    eff["成功率"] = (
+        (1 - eff["错误次数"] / eff["调用次数"].replace(0, 1)) * 100
+    ).round(1)
+    eff["成功率"] = eff["成功率"].apply(lambda v: f"{v:.1f}%")
+
     # Format numeric display columns
     for col in ("均输出chars", "均TiktokenTokens"):
         if col in eff.columns:

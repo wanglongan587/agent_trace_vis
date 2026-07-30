@@ -148,7 +148,7 @@ trace_viz/
     gemini.py                  # Gemini telemetry log → ParseResult
   views/
     opencode.py                # charts: token trend, allotment, sequence, raw
-    claude_code.py             # charts: timeline, token trend, cost, raw
+    claude_code.py              # charts: timeline, token trend, cost, raw
     gemini.py                  # gemini charts
     shared.py                  # render_mermaid, token_trend_fig, tool_inspector, …
   utils.py                     # tiktoken count, mermaid sanitization, formatters
